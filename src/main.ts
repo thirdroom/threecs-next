@@ -1,96 +1,16 @@
-import {
-  createWorld,
-  pipe,
-  addEntity,
-  defineComponent,
-  addComponent,
-  IWorld,
-  Component,
-  defineQuery,
-} from "bitecs";
-import {
-  Scene,
-  PerspectiveCamera,
-  Camera,
-  WebGLRenderer,
-} from "three";
-import { addObject3DEntity, Object3DComponent } from "./Object3DComponent";
-
-interface Time {
-  last: number;
-  delta: number;
-  elapsed: number;
-}
-
-type MapComponent<T> = Component & {
-  get: (eid: number) => T | undefined;
-  set: (eid: number, value: T | undefined) => void;
-};
-
-function defineMapComponent<T>(): MapComponent<T> {
-  const component = defineComponent({}) as MapComponent<T>;
-  const store: Map<number, T | undefined> = new Map();
-  component.get = (eid: number) => store.get(eid);
-  component.set = (eid: number, value: T | undefined) => {
-    store.set(eid, value);
-  };
-  return component;
-}
-
-const RendererComponent = defineMapComponent<WebGLRenderer>();
-const TimeComponent = defineMapComponent<Time>();
-
-type WorldOptions = {
-  scene?: Scene;
-  camera?: Camera;
-  renderer?: WebGLRenderer;
-  time?: Time;
-};
-
-type World = IWorld & { eid: number; scene: number; camera: number };
-
-function createThreeWorld(opts: WorldOptions = {}): World {
-  const world = createWorld() as World;
-  world.eid = addEntity(world);
-  addComponent(world, RendererComponent, world.eid);
-  RendererComponent.set(world.eid, opts.renderer || new WebGLRenderer());
-  addComponent(world, TimeComponent, world.eid);
-  TimeComponent.set(
-    world.eid,
-    opts.time || {
-      last: 0,
-      delta: 0,
-      elapsed: 0,
-    }
-  );
-  world.scene = addObject3DEntity(world, opts.scene || new Scene());
-  world.camera = addObject3DEntity(
-    world,
-    opts.camera || new PerspectiveCamera()
-  );
-  return world;
-}
-
-function TimeSystem(world: World) {
-  const now = performance.now();
-  world.time.delta = now - world.time.last;
-  world.time.elapsed += world.time.delta;
-  world.time.last = now;
-  return world;
-}
-
-function RenderSystem(world: World) {
-  const renderer = RendererComponent.get(world.eid)!;
-  const scene = Object3DComponent.object3D[world.scene]!;
-  const camera = Object3DComponent.object3D[world.camera]!;
-  renderer.render(scene, camera as Camera);
-  return world;
-}
+import { pipe, defineQuery } from "bitecs";
+import { createThreeWorld, ThreeWorld } from "./ThreeWorld";
+import { Object3DComponent } from "./Object3DComponent";
+import { TimeComponent } from "./TimeComponent";
+import { WebGLRendererSystem } from "./WebGLRendererSystem";
+import { TimeSystem } from "./TimeSystem";
+import { createResizeSystem } from "./ResizeSystem";
 
 const movementQuery = defineQuery([Object3DComponent]);
 
-function MovementSystem(world: World) {
-  const { delta, elapsed } = TimeComponent.get(world.eid)!;
+function MovementSystem(world: ThreeWorld) {
+  const delta = TimeComponent.delta[world.eid]!;
+  const elapsed = TimeComponent.elapsed[world.eid]!;
   const ents = movementQuery(world);
   for (let i = 0; i < ents.length; i++) {
     const e = ents[i];
@@ -109,33 +29,16 @@ function MovementSystem(world: World) {
 }
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
-const renderer = new WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
 
-window.addEventListener("resize", () => {
-  const camera = Object3DComponent.object3D[world.camera]! as PerspectiveCamera;
-  const renderer = RendererComponent.get(world.eid)!;
+const world = createThreeWorld({ canvas });
 
-  if (camera.isPerspectiveCamera) {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-  }
-
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-const camera = new PerspectiveCamera(
-  70,
-  window.innerWidth / window.innerHeight,
-  1,
-  1000
+const pipeline = pipe(
+  TimeSystem,
+  MovementSystem,
+  createResizeSystem(),
+  WebGLRendererSystem
 );
 
-const world = createThreeWorld({ renderer, camera });
-
-const pipeline = pipe(TimeSystem, MovementSystem, RenderSystem);
-
-renderer.setAnimationLoop(() => {
+world.renderer.setAnimationLoop(() => {
   pipeline(world);
 });

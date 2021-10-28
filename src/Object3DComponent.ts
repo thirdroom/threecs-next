@@ -1,4 +1,4 @@
-import { addEntity, defineComponent, IWorld, Types } from "bitecs";
+import { addComponent, defineComponent, Types } from "bitecs";
 import { Object3D } from "three";
 import {
   defineEulerProperty,
@@ -6,14 +6,12 @@ import {
   defineQuaternionProperty,
   defineVector3Property,
 } from "./component-utils";
-
-type World = IWorld & { eid: number; scene: number; camera: number };
+import { ThreeWorld } from "./ThreeWorld";
 
 const { f32, ui8, ui32 } = Types;
 
 const _Object3DComponent = defineComponent({
   id: ui32,
-  parent: Types.eid,
   up: [f32, 3],
   position: [f32, 3],
   rotation: [f32, 4],
@@ -34,38 +32,23 @@ const _Object3DComponent = defineComponent({
 });
 
 type IObject3DComponent = typeof _Object3DComponent & {
-  uuid: string[];
-  name: string[];
-  children: number[][];
-  animations: any[];
-  userData: any[];
-  object3DChildren: Object3D[][];
   object3D: Object3D[];
 };
 
 Object.defineProperties(_Object3DComponent, {
-  uuid: { value: [] },
-  name: { value: [] },
-  children: { value: [] },
-  animations: { value: [] },
-  userData: { value: [] },
-  object3DChildren: { value: [] },
   object3D: { value: [] },
 });
 
 export const Object3DComponent = _Object3DComponent as IObject3DComponent;
 
-type Object3DEntity = Object3D & { eid: number };
-
-export function addObject3DEntity(
-  world: World,
-  obj: Object3D,
-  parentEid: number = 0
+export function addObject3DComponent(
+  world: ThreeWorld,
+  eid: number,
+  obj: Object3D
 ): number {
-  const eid = addEntity(world);
+  addComponent(world, Object3DComponent, eid);
 
   Object3DComponent.id[eid] = obj.id;
-  Object3DComponent.parent[eid] = parentEid;
   Object3DComponent.matrixAutoUpdate[eid] = obj.matrixAutoUpdate ? 1 : 0;
   Object3DComponent.matrixWorldNeedsUpdate[eid] = obj.matrixWorldNeedsUpdate
     ? 1
@@ -76,14 +59,6 @@ export function addObject3DEntity(
   Object3DComponent.receiveShadow[eid] = obj.receiveShadow ? 1 : 0;
   Object3DComponent.frustumCulled[eid] = obj.frustumCulled ? 1 : 0;
   Object3DComponent.renderOrder[eid] = obj.renderOrder;
-
-  Object3DComponent.uuid[eid] = obj.uuid;
-  Object3DComponent.name[eid] = obj.name;
-  Object3DComponent.children[eid] = obj.children.map((child) =>
-    addObject3DEntity(world, child, eid)
-  );
-  Object3DComponent.animations[eid] = obj.animations;
-  Object3DComponent.userData[eid] = obj.userData;
   Object3DComponent.object3D[eid] = obj;
 
   Object.defineProperties(obj, {
@@ -95,31 +70,6 @@ export function addObject3DEntity(
       },
       set(value: string) {
         this.object3DComponent.id[this.eid] = value;
-      },
-    },
-    uuid: {
-      get() {
-        return this.object3DComponent.uuid[this.eid];
-      },
-      set(value: string) {
-        this.object3DComponent.uuid[this.eid] = value;
-      },
-    },
-    name: {
-      get() {
-        return this.object3DComponent.name[this.eid];
-      },
-      set(value: string) {
-        this.object3DComponent.name[this.eid] = value;
-      },
-    },
-    parent: {
-      get() {
-        const parentEid = this.object3DComponent.parent[this.eid];
-        return this.object3DComponent.object3D[parentEid];
-      },
-      set(object: Object3DEntity) {
-        this.object3DComponent.parent[this.eid] = object.eid;
       },
     },
     matrixAutoUpdate: {
@@ -192,15 +142,6 @@ export function addObject3DEntity(
       },
     },
   });
-
-  // TODO write an array observer that works with:
-  // - Set existing property
-  // - Set new property
-  // - Delete property
-  // - push / splice etc.
-  // Mutations should update the Object3DComponent.children array in addition to it's own array
-  // Helper methods in bitECS should be used to keep this array up to date
-  obj.children = new Proxy<Object3D[]>(obj.children, {});
 
   defineVector3Property(obj.up, Object3DComponent.up[eid]);
   defineVector3Property(obj.position, Object3DComponent.position[eid]);
