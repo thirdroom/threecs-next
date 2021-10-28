@@ -27,8 +27,7 @@ export function createThreeWorld(opts: WorldOptions = {}): ThreeWorld {
   addWebGLRendererComponent(world, world.eid, renderer);
   world.renderer = renderer;
 
-  const scene = opts.scene || new Scene();
-  addObject3DEntity(world, scene);
+  const scene = addObject3DEntity(world, opts.scene || new Scene());
 
   addObject3DEntity(world, opts.camera || new PerspectiveCamera(), scene);
 

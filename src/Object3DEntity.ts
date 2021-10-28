@@ -8,34 +8,38 @@ import { addObject3DComponent } from "./Object3DComponent";
 import { addPerspectiveCameraComponent } from "./PerspectiveCameraComponent";
 import { addSceneComponent } from "./SceneComponent";
 
-export type Object3DEntity = Object3D & { eid: number };
+export type Object3DEntity<T extends Object3D = Object3D> = T & { eid: number };
 
-export function addObject3DEntity(world: ThreeWorld, obj: Object3D, parent?: Object3D): number {
+export function addObject3DEntity<T extends Object3D>(
+  world: ThreeWorld,
+  obj: T,
+  parent?: Object3DEntity
+): Object3DEntity {
   const eid = addEntity(world);
 
   if (parent) {
     parent.add(obj);
   }
 
-  addObject3DComponent(world, eid, obj);
-  
-  if ((obj as Scene).isScene) {
+  addObject3DComponent(world, eid, obj, parent);
+
+  if ((obj as unknown as Scene).isScene) {
     addSceneComponent(world, eid);
   }
 
-  if ((obj as Group).isGroup) {
+  if ((obj as unknown as Group).isGroup) {
     addGroupComponent(world, eid);
   }
 
-  if ((obj as Camera).isCamera) {
-    addCameraComponent(world, eid, obj as Camera);
+  if ((obj as unknown as Camera).isCamera) {
+    addCameraComponent(world, eid, obj as unknown as Camera);
   }
 
-  if ((obj as PerspectiveCamera).isPerspectiveCamera) {
-    addPerspectiveCameraComponent(world, eid, obj as PerspectiveCamera);
+  if ((obj as unknown as PerspectiveCamera).isPerspectiveCamera) {
+    addPerspectiveCameraComponent(world, eid, obj as unknown as PerspectiveCamera);
   }
 
-  if ((obj as Mesh).isMesh) {
+  if ((obj as unknown as Mesh).isMesh) {
     addMeshComponent(world, eid);
   }
 
@@ -43,6 +47,5 @@ export function addObject3DEntity(world: ThreeWorld, obj: Object3D, parent?: Obj
     addObject3DEntity(world, obj.children[i]);
   }
 
-  return eid;
+  return obj as unknown as Object3DEntity;
 }
-

@@ -6,12 +6,16 @@ import {
   defineQuaternionProperty,
   defineVector3Property,
 } from "./component-utils";
+import { Object3DEntity } from "./Object3DEntity";
 import { ThreeWorld } from "./ThreeWorld";
 
 const { f32, ui8, ui32 } = Types;
 
 const _Object3DComponent = defineComponent({
   id: ui32,
+  parent: Types.eid,
+  prevSibling: Types.eid,
+  nextSibling: Types.eid,
   up: [f32, 3],
   position: [f32, 3],
   rotation: [f32, 4],
@@ -44,7 +48,8 @@ export const Object3DComponent = _Object3DComponent as IObject3DComponent;
 export function addObject3DComponent(
   world: ThreeWorld,
   eid: number,
-  obj: Object3D
+  obj: Object3D,
+  parent?: Object3DEntity
 ): number {
   addComponent(world, Object3DComponent, eid);
 
@@ -59,7 +64,23 @@ export function addObject3DComponent(
   Object3DComponent.receiveShadow[eid] = obj.receiveShadow ? 1 : 0;
   Object3DComponent.frustumCulled[eid] = obj.frustumCulled ? 1 : 0;
   Object3DComponent.renderOrder[eid] = obj.renderOrder;
+
+  Object3DComponent.parent[eid] = parent?.eid || 0;
+
+  const siblings = parent?.children as Object3DEntity[];
+  const objIndex = parent?.children.indexOf(obj) || -1;
+
+  if (siblings && objIndex !== -1) {
+    const prevSibling = objIndex === 0 ? undefined : siblings[objIndex - 1];
+    Object3DComponent.prevSibling[eid] = prevSibling?.eid || 0;
+
+    if (prevSibling) {
+      Object3DComponent.nextSibling[prevSibling.eid] = eid;
+    }
+  }
+
   Object3DComponent.object3D[eid] = obj;
+  
 
   Object.defineProperties(obj, {
     eid: { value: eid },
@@ -129,6 +150,8 @@ export function addObject3DComponent(
       },
     },
   });
+
+  // TODO: Redefine add/remove/removeFromParent/clear/attach methods
 
   Object.defineProperties(obj.layers, {
     eid: { value: eid },
